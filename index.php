@@ -3,6 +3,7 @@
 use Omnipay\Common\CreditCard;
 use Omnipay\Omnipay;
 use Silex\Application;
+use Symfony\Component\HttpFoundation\Request;
 
 require __DIR__.'/vendor/autoload.php';
 
@@ -15,13 +16,6 @@ $app->register(new Silex\Provider\TwigServiceProvider(), array(
 
 // enable Silex debugging
 $app['debug'] = true;
-
-// set the basurl for all templates
-$app->before(function () use ($app)
-{
-    // maybe a misnomer - getBaseUrl() seems to get a base *path*
-    $app["twig"]->addGlobal('baseurl', $app['request']->getBaseUrl());
-});
 
 // root route
 $app->get('/', function() use ($app) {
@@ -47,10 +41,10 @@ $app->get('/gateways/{name}', function($name) use ($app) {
 });
 
 // save gateway settings
-$app->post('/gateways/{name}', function($name) use ($app) {
+$app->post('/gateways/{name}', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
-    $gateway->initialize((array) $app['request']->get('gateway'));
+    $gateway->initialize((array) $request->get('gateway'));
 
     // save gateway settings in session
     $app['session']->set($sessionVar, $gateway->getParameters());
@@ -58,18 +52,18 @@ $app->post('/gateways/{name}', function($name) use ($app) {
     // redirect back to gateway settings page
     $app['session']->getFlashBag()->add('success', 'Gateway settings updated!');
 
-    return $app->redirect($app['request']->getBaseUrl() . $app['request']->getPathInfo());
+    return $app->redirect($request->getBaseUrl() . $request->getPathInfo());
 });
 
 // create gateway authorize
-$app->get('/gateways/{name}/authorize', function($name) use ($app) {
+$app->get('/gateways/{name}/authorize', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     $params = $app['session']->get($sessionVar.'.authorize', array());
-    $params['returnUrl'] = str_replace('/authorize', '/completeAuthorize', $app['request']->getUri());
-    $params['cancelUrl'] = $app['request']->getUri();
+    $params['returnUrl'] = str_replace('/authorize', '/completeAuthorize', $request->getUri());
+    $params['cancelUrl'] = $request->getUri();
     $card = new CreditCard($app['session']->get($sessionVar.'.card'));
 
     return $app['twig']->render('request.twig', array(
@@ -81,21 +75,21 @@ $app->get('/gateways/{name}/authorize', function($name) use ($app) {
 });
 
 // submit gateway authorize
-$app->post('/gateways/{name}/authorize', function($name) use ($app) {
+$app->post('/gateways/{name}/authorize', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     // load POST data
-    $params = $app['request']->get('params');
-    $card = $app['request']->get('card');
+    $params = $request->get('params');
+    $card = $request->get('card');
 
     // save POST data into session
     $app['session']->set($sessionVar.'.authorize', $params);
     $app['session']->set($sessionVar.'.card', $card);
 
     $params['card'] = $card;
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->authorize($params)->send();
 
     return $app['twig']->render('response.twig', array(
@@ -105,7 +99,7 @@ $app->post('/gateways/{name}/authorize', function($name) use ($app) {
 });
 
 // create gateway completeAuthorize
-$app->get('/gateways/{name}/completeAuthorize', function($name) use ($app) {
+$app->get('/gateways/{name}/completeAuthorize', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
@@ -120,7 +114,7 @@ $app->get('/gateways/{name}/completeAuthorize', function($name) use ($app) {
 });
 
 // create gateway capture
-$app->get('/gateways/{name}/capture', function($name) use ($app) {
+$app->get('/gateways/{name}/capture', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
@@ -135,18 +129,18 @@ $app->get('/gateways/{name}/capture', function($name) use ($app) {
 });
 
 // submit gateway capture
-$app->post('/gateways/{name}/capture', function($name) use ($app) {
+$app->post('/gateways/{name}/capture', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     // load POST data
-    $params = $app['request']->get('params');
+    $params = $request->get('params');
 
     // save POST data into session
     $app['session']->set($sessionVar.'.capture', $params);
 
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->capture($params)->send();
 
     return $app['twig']->render('response.twig', array(
@@ -156,14 +150,14 @@ $app->post('/gateways/{name}/capture', function($name) use ($app) {
 });
 
 // create gateway purchase
-$app->get('/gateways/{name}/purchase', function($name) use ($app) {
+$app->get('/gateways/{name}/purchase', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     $params = $app['session']->get($sessionVar.'.purchase', array());
-    $params['returnUrl'] = str_replace('/purchase', '/completePurchase', $app['request']->getUri());
-    $params['cancelUrl'] = $app['request']->getUri();
+    $params['returnUrl'] = str_replace('/purchase', '/completePurchase', $request->getUri());
+    $params['cancelUrl'] = $request->getUri();
     $card = new CreditCard($app['session']->get($sessionVar.'.card'));
 
     return $app['twig']->render('request.twig', array(
@@ -175,21 +169,21 @@ $app->get('/gateways/{name}/purchase', function($name) use ($app) {
 });
 
 // submit gateway purchase
-$app->post('/gateways/{name}/purchase', function($name) use ($app) {
+$app->post('/gateways/{name}/purchase', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     // load POST data
-    $params = $app['request']->get('params');
-    $card = $app['request']->get('card');
+    $params = $request->get('params');
+    $card = $request->get('card');
 
     // save POST data into session
     $app['session']->set($sessionVar.'.purchase', $params);
     $app['session']->set($sessionVar.'.card', $card);
 
     $params['card'] = $card;
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->purchase($params)->send();
 
     return $app['twig']->render('response.twig', array(
@@ -200,7 +194,7 @@ $app->post('/gateways/{name}/purchase', function($name) use ($app) {
 
 // gateway purchase return
 // this won't work for gateways which require an internet-accessible URL (yet)
-$app->match('/gateways/{name}/completePurchase', function($name) use ($app) {
+$app->match('/gateways/{name}/completePurchase', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
@@ -208,7 +202,7 @@ $app->match('/gateways/{name}/completePurchase', function($name) use ($app) {
     // load request data from session
     $params = $app['session']->get($sessionVar.'.purchase', array());
 
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->completePurchase($params)->send();
 
     return $app['twig']->render('response.twig', array(
@@ -218,7 +212,7 @@ $app->match('/gateways/{name}/completePurchase', function($name) use ($app) {
 });
 
 // create gateway create Credit Card
-$app->get('/gateways/{name}/create-card', function($name) use ($app) {
+$app->get('/gateways/{name}/create-card', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
@@ -235,21 +229,21 @@ $app->get('/gateways/{name}/create-card', function($name) use ($app) {
 });
 
 // submit gateway create Credit Card
-$app->post('/gateways/{name}/create-card', function($name) use ($app) {
+$app->post('/gateways/{name}/create-card', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     // load POST data
-    $params = $app['request']->get('params');
-    $card = $app['request']->get('card');
+    $params = $request->get('params');
+    $card = $request->get('card');
 
     // save POST data into session
     $app['session']->set($sessionVar.'.create', $params);
     $app['session']->set($sessionVar.'.card', $card);
 
     $params['card'] = $card;
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->createCard($params)->send();
 
     return $app['twig']->render('response.twig', array(
@@ -276,21 +270,21 @@ $app->get('/gateways/{name}/update-card', function($name) use ($app) {
 });
 
 // submit gateway update Credit Card
-$app->post('/gateways/{name}/update-card', function($name) use ($app) {
+$app->post('/gateways/{name}/update-card', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     // load POST data
-    $params = $app['request']->get('params');
-    $card = $app['request']->get('card');
+    $params = $request->get('params');
+    $card = $request->get('card');
 
     // save POST data into session
     $app['session']->set($sessionVar.'.update', $params);
     $app['session']->set($sessionVar.'.card', $card);
 
     $params['card'] = $card;
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->updateCard($params)->send();
 
     return $app['twig']->render('response.twig', array(
@@ -315,18 +309,18 @@ $app->get('/gateways/{name}/delete-card', function($name) use ($app) {
 });
 
 // submit gateway delete Credit Card
-$app->post('/gateways/{name}/delete-card', function($name) use ($app) {
+$app->post('/gateways/{name}/delete-card', function($name, Request $request) use ($app) {
     $gateway = Omnipay::create($name);
     $sessionVar = 'omnipay.'.$gateway->getShortName();
     $gateway->initialize((array) $app['session']->get($sessionVar));
 
     // load POST data
-    $params = $app['request']->get('params');
+    $params = $request->get('params');
 
     // save POST data into session
     $app['session']->set($sessionVar.'.delete', $params);
 
-    $params['clientIp'] = $app['request']->getClientIp();
+    $params['clientIp'] = $request->getClientIp();
     $response = $gateway->deleteCard($params)->send();
 
     return $app['twig']->render('response.twig', array(

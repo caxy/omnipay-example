@@ -12,8 +12,8 @@
         }
     ],
     "require": {
-        "omnipay/omnipay": "~2.0",
-        "silex/silex": "~1.1",
-        "twig/twig": "~1.12"
+        "omnipay/omnipay": "^2.0",
+        "silex/silex": "^2.0",
+        "twig/twig": "^1.27"
     }
 }
